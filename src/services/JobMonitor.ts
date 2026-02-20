@@ -1,4 +1,4 @@
-import { WorkDetector } from '../core/WorkDetector';
+import { IWorkDetector } from '../core/WorkDetector';
 import { IBlockchainProvider } from '../infra/BlockchainService';
 import { ISequencerContract } from '../infra/SequencerRepository';
 
@@ -10,77 +10,85 @@ export class JobMonitor {
   private lastProcessedBlock: number = 0;
 
   constructor(
-    private readonly blockchainService: IBlockchainProvider, // Interface, no clase
-    private readonly sequencerRepo: ISequencerContract,      // Interface, no clase
-    private readonly workDetector: typeof WorkDetector,
+    private readonly blockchainService: IBlockchainProvider,
+    private readonly sequencerRepo: ISequencerContract,
+    private readonly workDetector: IWorkDetector,
     private readonly notifiers: INotifier[],
     private readonly workSelector: string
   ) { }
 
   /**
-   * Sincroniza el estado inicial y arranca el bucle infinito.
-   */
-  async start(): Promise<void> {
-    if (this.lastProcessedBlock === 0) {
-      this.lastProcessedBlock = await this.blockchainService.getBlockNumber();
-    }
-
-    while (true) {
-      await this.tick();
-      await new Promise(resolve => setTimeout(resolve, 12000));
-    }
-  }
-
-  /**
-   * Escanea bloques históricos hacia atrás.
+   * Escanea una cantidad determinada de bloques hacia atrás desde el bloque actual.
+   * Utilizado principalmente al arranque del proceso.
    */
   async scanPastBlocks(blocksBack: number): Promise<void> {
     const currentBlock = await this.blockchainService.getBlockNumber();
-    const startBlock = currentBlock - blocksBack;
-    const activeJobs = new Set(await this.getActiveJobsFromRepo());
+    const startBlock = Math.max(0, currentBlock - blocksBack);
+
+    const activeJobs = await this.getActiveJobsWhitelist();
 
     await this.processBlockRange(startBlock, currentBlock, activeJobs);
+
+    // Sincronizamos el puntero para evitar que tick() vuelva a procesar lo mismo
     this.lastProcessedBlock = currentBlock;
   }
 
   /**
-   * Unidad de trabajo para el monitoreo en tiempo real.
+   * Ejecuta una unidad de trabajo de monitoreo. 
+   * Identifica si hay nuevos bloques y coordina su procesamiento.
    */
   async tick(): Promise<void> {
     try {
       const currentBlock = await this.blockchainService.getBlockNumber();
 
       if (currentBlock > this.lastProcessedBlock) {
-        const activeJobs = new Set(await this.getActiveJobsFromRepo());
-        await this.processBlockRange(this.lastProcessedBlock + 1, currentBlock, activeJobs);
+        // En cada tick obtenemos la lista actualizada de jobs del Sequencer
+        const activeJobs = await this.getActiveJobsWhitelist();
+
+        const start = this.lastProcessedBlock + 1;
+        await this.processBlockRange(start, currentBlock, activeJobs);
+
         this.lastProcessedBlock = currentBlock;
       }
     } catch (error) {
-      throw new Error(`[JobMonitor] Error en el ciclo: ${error instanceof Error ? error.message : error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`[JobMonitor] Error en el ciclo: ${message}`);
     }
   }
 
+  /**
+   * Itera sobre un rango de bloques y delega la detección de transacciones.
+   */
   private async processBlockRange(start: number, end: number, jobs: Set<string>): Promise<void> {
     for (let i = start; i <= end; i++) {
       const block = await this.blockchainService.getBlock(i);
       if (!block) continue;
 
-      for (const tx of block.prefetchedTransactions) {
+      const detectionPromises = block.prefetchedTransactions.map(async (tx) => {
         const result = this.workDetector.detect(tx, jobs, this.workSelector);
+
         if (result.isMatch && result.jobAddress) {
           await Promise.all(this.notifiers.map(n => n.notify(result.jobAddress!, tx.hash)));
         }
-      }
+      });
+
+      await Promise.all(detectionPromises);
     }
   }
 
-  private async getActiveJobsFromRepo(): Promise<string[]> {
+  /**
+   * Obtiene y normaliza los jobs activos desde el repositorio.
+   */
+  private async getActiveJobsWhitelist(): Promise<Set<string>> {
     const totalJobs = Number(await this.sequencerRepo.numJobs());
-    const promises: Promise<string>[] = [];
+
+    const jobPromises: Promise<string>[] = [];
     for (let i = 0; i < totalJobs; i++) {
-      promises.push(this.sequencerRepo.jobAt(i));
+      jobPromises.push(this.sequencerRepo.jobAt(i));
     }
-    const addresses = await Promise.all(promises);
-    return addresses.map(a => a.toLowerCase());
+
+    const jobAddresses = await Promise.all(jobPromises);
+
+    return new Set(jobAddresses.map(addr => addr.toLowerCase()));
   }
 }
