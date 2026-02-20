@@ -1,20 +1,28 @@
-interface IWorkTransaction {
+export interface IWorkTransaction {
   readonly to: string | null;
   readonly data: string;
 }
 
-interface DetectionResult {
+export interface IDetectionResult {
   readonly isMatch: boolean;
   readonly jobAddress?: string;
 }
 
-export class WorkDetector {
-
-  public static detect(
+export interface IWorkDetector {
+  detect(
     tx: IWorkTransaction,
     jobWhitelist: Set<string>,
     workSelector: string
-  ): DetectionResult {
+  ): IDetectionResult;
+}
+
+export class WorkDetector implements IWorkDetector {
+
+  public detect(
+    tx: IWorkTransaction,
+    jobWhitelist: Set<string>,
+    workSelector: string
+  ): IDetectionResult {
     if (!tx.to) {
       return { isMatch: false }
     }

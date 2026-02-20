@@ -13,8 +13,8 @@ describe('WorkDetector', () => {
       to: JOB_ADDRESS,
       data: WORK_SELECTOR + '00000000000000000000000'
     }
-
-    const result = WorkDetector.detect(tx, whitelist, WORK_SELECTOR)
+    const detector = new WorkDetector()
+    const result = detector.detect(tx, whitelist, WORK_SELECTOR)
 
     expect(result.isMatch).toBe(true)
     expect(result.jobAddress).toBe(JOB_ADDRESS.toLowerCase())
@@ -25,8 +25,8 @@ describe('WorkDetector', () => {
       to: JOB_ADDRESS.toUpperCase(),
       data: WORK_SELECTOR
     }
-
-    const result = WorkDetector.detect(tx, whitelist, WORK_SELECTOR)
+    const detector = new WorkDetector()
+    const result = detector.detect(tx, whitelist, WORK_SELECTOR)
 
     expect(result.isMatch).toBe(true)
     expect(result.jobAddress).toBe(JOB_ADDRESS.toLowerCase())
@@ -37,8 +37,8 @@ describe('WorkDetector', () => {
       to: '0x000000000000000000000000000000000000dead',
       data: WORK_SELECTOR
     }
-
-    const result = WorkDetector.detect(tx, whitelist, WORK_SELECTOR)
+    const detector = new WorkDetector()
+    const result = detector.detect(tx, whitelist, WORK_SELECTOR)
 
     expect(result.isMatch).toBe(false)
     expect(result.jobAddress).toBeUndefined()
@@ -49,8 +49,8 @@ describe('WorkDetector', () => {
       to: JOB_ADDRESS,
       data: '0xa9059cbb'
     }
-
-    const result = WorkDetector.detect(tx, whitelist, WORK_SELECTOR)
+    const detector = new WorkDetector()
+    const result = detector.detect(tx, whitelist, WORK_SELECTOR)
 
     expect(result.isMatch).toBe(false)
   })
@@ -60,8 +60,8 @@ describe('WorkDetector', () => {
       to: null,
       data: '0x60806040...'
     }
-
-    const result = WorkDetector.detect(tx, whitelist, WORK_SELECTOR)
+    const detector = new WorkDetector()
+    const result = detector.detect(tx, whitelist, WORK_SELECTOR)
 
     expect(result.isMatch).toBe(false)
   })
@@ -71,8 +71,8 @@ describe('WorkDetector', () => {
       to: JOB_ADDRESS,
       data: '0x12'
     }
-
-    const result = WorkDetector.detect(tx, whitelist, WORK_SELECTOR)
+    const detector = new WorkDetector()
+    const result = detector.detect(tx, whitelist, WORK_SELECTOR)
 
     expect(result.isMatch).toBe(false)
   })
