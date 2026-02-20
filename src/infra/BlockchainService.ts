@@ -1,6 +1,6 @@
-export interface IBlockTransaction {
-  readonly to: string | null;
-  readonly data: string;
+import { IWorkTransaction } from "../core/WorkDetector";
+
+export interface IBlockTransaction extends IWorkTransaction {
   readonly hash: string;
 }
 
